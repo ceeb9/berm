@@ -2,8 +2,15 @@ import sys
 import os
 import shutil
 import time
+import lzma
 from dataclasses import dataclass
 from typing import Callable
+
+# 1. assess file type, create new folder and archive if doesnt exist
+# 2. decompress that file type's archive
+# 3. move file to the deleted files folder of that type, 
+#    renamed as the time it moved in unix millis
+# 4. recompress everything in that folder
 
 # maps each flag to the corresponding:
 # 1: expected length
@@ -34,18 +41,36 @@ def trash(mode, filename):
             print("directory not found")
             sys.exit()
 
-    shutil.move(f"{CWD}/{filename}", f"{BERM_PATH}/files/{filename}")
-    write_to_db(round(time.time()*1000), mode[0], f"{CWD}/{filename}", f"{BERM_PATH}/files/{filename}")
+    new_filename = round(time.time()*1000)
+    old_file_path = f"{CWD}/{filename}"
+
+    # 128mb chunks
+    chunk_size = 134217728
+    lzc = lzma.LZMACompressor()
+    
+    # read chunks of file in and write them as compressed
+    with open(old_file_path, "rb") as original:
+        with lzma.open(f"{BERM_PATH}/files/{new_filename}", "w") as new:
+            while True:
+                data = original.read(chunk_size)
+                new.write(data) # write compressed
+
+                print("size", sys.getsizeof(data))
+
+                if sys.getsizeof(data) < chunk_size:
+                    break
+
+    write_to_db(new_filename, mode[0], f"{CWD}/{filename}", f"{BERM_PATH}/files/{new_filename}")
     return
 
 def undo(mode, filename=""):
     print("undo", mode, filename)
     if mode == "LAST":
-        print()
+        print("undo not implemented")
     elif mode == "FILE":
-        print()
+        print("undo not implemented")
     elif mode == "DIR":
-        print()
+        print("undo not implemented")
     return
 
 def search(mode, filename):
@@ -111,8 +136,9 @@ def create_database():
 # dest_path: the path of the file now (after trashing)
 def write_to_db(time: int, filetype: str, orig_path: str, dest_path: str):
     with open(f"{BERM_PATH}/db", "a") as db:
-        db.write(f"{time},{filetype},{orig_path},{dest_path}\n")
-        print(f"{time},{filetype},{orig_path},{dest_path}")
+        entry = f"{time},{filetype},{orig_path},{dest_path}\n"
+        db.write(entry)
+        print(entry)
     return
 
 def parse_arguments(argv):
