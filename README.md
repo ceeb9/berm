@@ -10,7 +10,6 @@ better rm, a small file deletion utility that uses squashfs to store deleted fil
 4. add folder to squashfs archive
 5. delete item from staging area
 6. entry added to db:
-    name
     original filepath
     time of operation as written in queue db
 
