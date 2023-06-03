@@ -11,7 +11,7 @@ better rm, a small file deletion utility that uses squashfs to store deleted fil
 5. delete item from staging area
 6. entry added to db:
     original filepath
-    time of operation as written in queue db
+    time of operation as written in db
 
 ## undo component
 1. search database for unix timestamp of operation to undo

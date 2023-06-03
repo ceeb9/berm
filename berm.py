@@ -75,12 +75,44 @@ def delete(file: Path):
     shutil.rmtree(operation_path)
     write_to_db(file.absolute(), time_of_operation)
 
+def undo(time_of_operation: int):
+    # get the path for this operation
+    original_path = None
+    with closing(sqlite3.connect(DATABASE_PATH)) as con:
+        cur = con.cursor()
+        cur.execute(f"SELECT * FROM operations WHERE time={time_of_operation}")
+        original_path = Path(cur.fetchone()[0])
+
+    print("Unpacking archive...")
+    unsquash_cmd = Popen([str(shutil.which("unsquashfs")), '-d', str(BERM_DIR/'unpacked'), str(ARCHIVE_PATH)], stdout=DEVNULL)
+    unsquash_cmd.wait()
+
+    print(f"Undoing operation on {original_path}...")
+    shutil.move(BERM_DIR/'unpacked'/str(time_of_operation), os.getcwd())
+    shutil.move(Path.cwd()/str(time_of_operation), Path.cwd()/'restored')
+
+    print("Repacking archive...")
+    os.remove(ARCHIVE_PATH)
+    repack_files = [BERM_DIR/'unpacked'/name for name in os.listdir(BERM_DIR/'unpacked')]
+    resquash_cmd = Popen([str(shutil.which("mksquashfs")), *repack_files, str(ARCHIVE_PATH), "-keep-as-directory"], stdout=DEVNULL)
+    resquash_cmd.wait()
+    shutil.rmtree(BERM_DIR/'unpacked')
+
+    # delete entry
+    with closing(sqlite3.connect(DATABASE_PATH)) as con:
+        cur = con.cursor()
+        cur.execute(f"DELETE FROM operations WHERE time={time_of_operation}")
+        con.commit()
+    print(f"{original_path} restored to {Path.cwd()/'restored'}")
+
 if __name__ == "__main__":
     for check in IntegrityChecks.checks:
         check()
+    print()
+
     delete(Path(sys.argv[1]))
-#    with closing(sqlite3.connect(DATABASE_PATH)) as con:
-#        cur = con.cursor()
-#        cur.execute("SELECT * FROM operations")
-#        for operation in cur.fetchall():
-#            print(operation)
+    with closing(sqlite3.connect(DATABASE_PATH)) as con:
+        cur = con.cursor()
+        cur.execute("SELECT MAX(time) FROM operations")
+        time_of_operation = cur.fetchone()[0]
+        undo(time_of_operation)
